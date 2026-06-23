@@ -1,0 +1,75 @@
+"""
+indexing/text_simhash.py
+
+✅ geração de fingerprint SimHash
+"""
+
+from pathlib import Path
+import time
+
+from simhash import Simhash
+from utils.file_utils import TEXT_EXT
+
+
+# ============================================================
+# DEBUG
+# ============================================================
+
+def debug_print(debug: bool, msg: str):
+    if debug:
+        print(f"[DEBUG] {msg}")
+
+
+# ============================================================
+# LEITURA SEGURA
+# ============================================================
+
+def read_text_safe(path: Path) -> str:
+
+    for enc in ("utf-8", "latin-1", "cp1252"):
+        try:
+            return path.read_text(encoding=enc)
+        except Exception:
+            continue
+
+    return ""
+
+
+# ============================================================
+# INDEXAÇÃO
+# ============================================================
+
+def compute_index_text_simhash(files: list[Path], debug=False):
+
+    debug_print(debug, "Index text_simhash")
+
+    index = []
+
+    for fp in files:
+
+        if fp.suffix.lower() not in TEXT_EXT:
+            continue
+
+        start = time.perf_counter()
+
+        text = read_text_safe(fp)
+
+        if not text.strip():
+            continue
+
+        try:
+            sh = Simhash(text)
+            assert sh.value is not None
+        except Exception:
+            continue
+
+        elapsed = max(0.000001, round((time.perf_counter() - start) * 1000, 6))
+
+        index.append({
+            "file_path": fp,
+            "method": "text_simhash",
+            "fingerprint": str(int(sh.value)),  # ✅ guarda como string!
+            "execution_time_ms": elapsed,
+        })
+
+    return index
