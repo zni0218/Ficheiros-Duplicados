@@ -1,31 +1,19 @@
 """
 build_index.py
-
-Indexação multi-método.
-
-✅ dataset + temp (temp_mode)
-✅ CSV por método
-✅ combined_index (dataset)
-✅ append no temp
-✅ path curto + abs_path
 """
 
+# IMPORTS BASE
+
 from pathlib import Path
-import argparse
+import pandas as pd
 import csv
-import time
 
-from core.run_validation import run_validation
-
+# utilitários
 from utils.path_utils import path_for_csv
 from utils.file_utils import guess_mime
 from utils.path_utils_safe import safe_path, safe_path_obj
 
-
-# ============================================================
-# IMPORTS (INDEXING)
-# ============================================================
-
+# métodos
 import indexing.hashing_exato as hashing_exato
 import indexing.fuzzy_chunks as fuzzy_chunks
 import indexing.image_phash as image_phash
@@ -36,79 +24,101 @@ import indexing.ssdeep_hash as ssdeep_hash
 import indexing.tlsh_hash as tlsh_hash
 
 
-# ============================================================
-# METHODS
-# ============================================================
+# MAPA GLOBAL DE MÉTODOS
 
 INDEX_METHODS = {
-    "hashing_exato": getattr(hashing_exato, "compute_index_hashing_exato", None),
-    "fuzzy_chunks": getattr(fuzzy_chunks, "compute_index_fuzzy_chunks", None),
-    "image_phash": getattr(image_phash, "compute_index_image_phash", None),
-    "audio_phash": getattr(audio_phash, "compute_index_audio_phash", None),
-    "text_simhash": getattr(text_simhash, "compute_index_text_simhash", None),
-    "video_phash": getattr(video_phash, "compute_index_video_phash", None),
-    "ssdeep": getattr(ssdeep_hash, "compute_index_ssdeep", None),
-    "tlsh": getattr(tlsh_hash, "compute_index_tlsh", None),
+    "hashing_exato": hashing_exato.compute_index_hashing_exato,
+    "fuzzy_chunks": fuzzy_chunks.compute_index_fuzzy_chunks,
+    "image_phash": image_phash.compute_index_image_phash,
+    "audio_phash": audio_phash.compute_index_audio_phash,
+    "text_simhash": text_simhash.compute_index_text_simhash,
+    "video_phash": video_phash.compute_index_video_phash,
+    "ssdeep": ssdeep_hash.compute_index_ssdeep,
+    "tlsh": tlsh_hash.compute_index_tlsh,
 }
 
-
-# ============================================================
-# DEBUG
-# ============================================================
-
-def debug_print(debug: bool, msg: str):
-    if debug:
-        print(f"[DEBUG] {msg}")
+ALL_METHODS = list(INDEX_METHODS.keys())
 
 
-# ============================================================
-# FILTER MIME
-# ============================================================
 
 def filter_files(files, method):
+    """
+    Filtra ficheiros com base no método.
+    """
 
-    filtered = []
+    out = []
 
     for fp in files:
         try:
-            mime = guess_mime(fp)
+            mime = guess_mime(fp) or ""
 
-            if method == "image_phash":
-                if mime.startswith("image/"):
-                    filtered.append(fp)
+            # filtros por tipo
+            if method == "image_phash" and mime.startswith("image/"):
+                out.append(fp)
 
-            elif method == "audio_phash":
-                if mime.startswith("audio/"):
-                    filtered.append(fp)
+            elif method == "audio_phash" and mime.startswith("audio/"):
+                out.append(fp)
 
-            elif method == "video_phash":
-                if mime.startswith("video/"):
-                    filtered.append(fp)
+            elif method == "video_phash" and mime.startswith("video/"):
+                out.append(fp)
 
-            elif method == "text_simhash":
-                if mime.startswith("text/") or "json" in mime:
-                    filtered.append(fp)
+            elif method == "text_simhash" and (
+                mime.startswith("text/") or "json" in mime
+            ):
+                out.append(fp)
 
-            else:
-                filtered.append(fp)
+            # outros métodos aceitam tudo
+            elif method not in (
+                "image_phash",
+                "audio_phash",
+                "video_phash",
+                "text_simhash",
+            ):
+                out.append(fp)
 
         except:
             continue
 
-    return filtered
+    return out
 
 
-# ============================================================
-# CSV WRITERS
-# ============================================================
 
-def write_csv(path: Path, rows: list[dict], append=False):
+def merge_rows(all_rows):
+    """
+    Junta resultados de todos os métodos num único dataset.
+    """
 
+    combined = {}
+
+    for method, rows in all_rows.items():
+        for r in rows:
+
+            key = r["path"]
+
+            # cria entrada nova
+            if key not in combined:
+                combined[key] = {
+                    "path": r["path"],
+                    "abs_path": r["abs_path"]
+                }
+
+                # inicializa todos métodos
+                for m in ALL_METHODS:
+                    combined[key][m] = None
+
+            # preenche fingerprint
+            combined[key][method] = r["fingerprint"]
+
+    return list(combined.values())
+
+
+def write_method_csv(path: Path, rows):
+
+    # verifica se já existe
     exists = path.exists()
-    mode = "a" if append else "w"
 
-    with open(safe_path(path), mode, newline="", encoding="utf-8") as f:
-
+    # abre em append ou write
+    with open(safe_path(path), "a" if exists else "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(
             f,
             fieldnames=[
@@ -116,123 +126,72 @@ def write_csv(path: Path, rows: list[dict], append=False):
                 "path",
                 "fingerprint",
                 "execution_time_ms",
-                "abs_path",
-            ],
+                "abs_path"
+            ]
         )
 
-        if not exists or not append:
+        # escreve header se for novo
+        if not exists:
             writer.writeheader()
 
         writer.writerows(rows)
 
 
-def write_combined_csv(path: Path, rows: list[dict]):
-
-    if not rows:
-        return
-
-    keys = set()
-    for r in rows:
-        keys.update(r.keys())
-
-    method_cols = sorted(
-        k for k in keys if k not in ("path", "abs_path")
-    )
-
-    fieldnames = ["path"] + method_cols + ["abs_path"]
-
-    with open(safe_path(path), "w", newline="", encoding="utf-8") as f:
-
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-
-        writer.writeheader()
-        writer.writerows(rows)
-
-
-# ============================================================
-# MERGE
-# ============================================================
-
-def merge_indexes(all_rows: dict):
-
-    combined = {}
-
-    for method, rows in all_rows.items():
-
-        for r in rows:
-
-            key = r["path"]
-
-            if key not in combined:
-                combined[key] = {
-                    "path": r["path"],
-                    "abs_path": r["abs_path"],
-                }
-
-            combined[key][method] = r["fingerprint"]
-
-    return list(combined.values())
-
-
-# ============================================================
 # MAIN
-# ============================================================
 
-def build_index(
-    base: Path,
-    out: Path,
-    debug: bool = False,
-    temp_mode: bool = False
-):
+def build_index(base, out: Path, methods=None, debug=False):
+    """
+    Função principal de construção de índice.
+    """
 
-    base = safe_path_obj(base)
+    # normaliza path
     out = safe_path_obj(out)
 
-    index_dir = out / ("temp_index" if temp_mode else "dataset_index")
+    # define diretoria de index
+    if out.name in ("dataset_index", "session_index"):
+        index_dir = out
+    else:
+        index_dir = out / "dataset_index"
+
     index_dir.mkdir(parents=True, exist_ok=True)
 
-    # ✅ ficheiro ou pasta
-    if base.is_file():
+    # caminho do CSV combinado
+    combined_path = index_dir / "combined_index.csv"
+
+    # seleção de métodos
+    if methods is None:
+        selected_methods = INDEX_METHODS
+    else:
+        selected_methods = {
+            m: INDEX_METHODS[m]
+            for m in methods
+            if m in INDEX_METHODS
+        }
+
+    if debug:
+        print(f"[DEBUG] methods usados: {list(selected_methods.keys())}")
+
+    # obter ficheiros
+    if isinstance(base, list):
+        files = base
+        base_dir = Path(".")
+
+    elif base.is_file():
         files = [base]
         base_dir = base.parent
+
     else:
         files = list(base.rglob("*.*"))
         base_dir = base
 
-    label_root = Path("data") / base_dir.name
+    # EXECUÇÃO DOS MÉTODOS
 
-    # --------------------------------------------------------
-    # VALIDATION (só dataset)
-    # --------------------------------------------------------
+    all_rows = {}
+    method_times = {}   # tempo por método
 
-    if not temp_mode:
+    for method, fn in selected_methods.items():
 
-        debug_print(debug, "Running validation")
-
-        validation = run_validation(
-            base=base,
-            out=out / "validation",
-            debug=debug,
-            temp_mode=False
-        )
-
-        files = validation["valid_files"]
-
-        if not files:
-            print("[ERROR] Nenhum ficheiro válido")
-            return
-
-    # --------------------------------------------------------
-    # INDEX
-    # --------------------------------------------------------
-
-    all_method_rows = {}
-
-    for method, fn in INDEX_METHODS.items():
-
-        if fn is None:
-            continue
-
+        # filtrar ficheiros válidos
         method_files = filter_files(files, method)
 
         if not method_files:
@@ -245,79 +204,75 @@ def build_index(
 
         rows = []
 
+        # normalizar resultados
         for r in raw:
             try:
-                fp = r["file_path"]
-
                 rows.append({
                     "method": method,
-                    "path": path_for_csv(
-                        fp,
-                        base_dir,
-                        dataset_label_root=label_root
-                    ),
+                    "path": path_for_csv(r["file_path"], base_dir),
                     "fingerprint": r["fingerprint"],
                     "execution_time_ms": r.get("execution_time_ms", 0),
-                    "abs_path": safe_path(fp),
+                    "abs_path": safe_path(r["file_path"])
                 })
-
             except:
                 continue
 
         if not rows:
             continue
 
-        csv_path = index_dir / (
-            f"{method}_temp_index.csv" if temp_mode
-            else f"{method}_index.csv"
-        )
+        # calcular tempo total do método (em segundos)
+        total_method_time_ms = sum(r.get("execution_time_ms", 0) for r in rows)
+        total_method_time_s = total_method_time_ms / 1000
 
-        write_csv(csv_path, rows, append=temp_mode)
+        method_times[method] = round(total_method_time_s, 4)
 
-        if not temp_mode:
-            all_method_rows[method] = rows
+        # guardar CSV do método
+        method_csv = index_dir / f"{method}_index.csv"
+        write_method_csv(method_csv, rows)
 
+        all_rows[method] = rows
+
+    # nenhum método executado
+    if not all_rows:
         if debug:
-            print(f"[{method}] {len(rows)} entries")
+            print("[DEBUG] nenhum método executado")
 
-    # --------------------------------------------------------
-    # COMBINED (SÓ DATASET)
-    # --------------------------------------------------------
+        return {
+            "method_times": method_times
+        }
 
-    if not temp_mode:
+    # MERGE FINAL
 
-        combined = merge_indexes(all_method_rows)
+    new_df = pd.DataFrame(merge_rows(all_rows))
 
-        write_combined_csv(
-            index_dir / "combined_index.csv",
-            combined
-        )
+    if new_df.empty:
+        return {
+            "method_times": method_times
+        }
 
-        if debug:
-            print(f"[COMBINED] {len(combined)} entries")
+    # garantir todas colunas
+    for m in ALL_METHODS:
+        if m not in new_df.columns:
+            new_df[m] = None
 
+    # MERGE INCREMENTAL
 
-# ============================================================
-# CLI
-# ============================================================
+    if combined_path.exists():
+        old_df = pd.read_csv(combined_path)
 
-if __name__ == "__main__":
+        full = pd.concat([old_df, new_df], ignore_index=True)
+        full = full.drop_duplicates(subset=["path"], keep="last")
 
-    PROJECT_ROOT = Path(__file__).resolve().parents[1]
+    else:
+        full = new_df
 
-    default_base = PROJECT_ROOT / "data/original_files"
+    # guardar CSV final
+    full.to_csv(combined_path, index=False)
 
-    parser = argparse.ArgumentParser()
+    if debug:
+        print(f"[INDEX] total={len(full)}")
 
-    parser.add_argument("--base", default=str(default_base))
-    parser.add_argument("--out", default=str(PROJECT_ROOT / "data/outputs"))
-    parser.add_argument("--debug", action="store_true")
-
-    args = parser.parse_args()
-
-    build_index(
-        base=Path(args.base),
-        out=Path(args.out),
-        debug=args.debug,
-        temp_mode=False
-    )
+    # return com tempos por método
+    return {
+        "method_times": method_times
+    }

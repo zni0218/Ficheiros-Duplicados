@@ -1,18 +1,14 @@
 """
 file_utils.py
 
-LOW-LEVEL utilities para:
-- Hashing
-- MIME detection
-- Iteração de ficheiros
+Utilitários base para:
+- hashing
+- deteção de MIME
+- iteração de ficheiros
 
-✅ Sem lógica de negócio
-✅ Seguro para Windows / Unicode
 """
 
-# ============================================================
 # IMPORTS
-# ============================================================
 
 from pathlib import Path
 import hashlib
@@ -20,34 +16,22 @@ from typing import Iterable, Optional
 import mimetypes
 import magic
 
+# utilitário de path seguro
 from utils.path_utils_safe import safe_path
 
 
-# ============================================================
 # CONFIG
-# ============================================================
 
-BUFFER_SIZE = 1024 * 1024  # 1MB leitura eficiente
+# tamanho de buffer para leitura eficiente
+BUFFER_SIZE = 1024 * 1024  # 1MB
 
-# ✅ Manter uma única instância
+# instância global do magic (mais eficiente)
 _MAGIC = magic.Magic(mime=True)
 
 
-# ============================================================
-# EXTENSIONS (NECESSÁRIO PARA VALIDATION)
-# ============================================================
+# EXTENSIONS
 
-"""
-⚠️ IMPORTANTE:
-
-Estas listas NÃO garantem o tipo real.
-
-Servem para:
-✅ categorização inicial
-✅ validações cruzadas (EXT vs MIME)
-✅ fallback quando MIME falha
-"""
-
+# listas usadas para categorização e validação
 EXT_BY_CATEGORY = {
     "text": {
         ".txt", ".md", ".log",
@@ -84,7 +68,7 @@ EXT_BY_CATEGORY = {
     },
 }
 
-# ✅ atalhos (melhor legibilidade noutros módulos)
+# atalhos para outros módulos
 TEXT_EXT     = EXT_BY_CATEGORY["text"]
 DOCUMENT_EXT = EXT_BY_CATEGORY["document"]
 IMAGE_EXT    = EXT_BY_CATEGORY["image"]
@@ -93,45 +77,43 @@ VIDEO_EXT    = EXT_BY_CATEGORY["video"]
 ARCHIVE_EXT  = EXT_BY_CATEGORY["archive"]
 BINARY_EXT   = EXT_BY_CATEGORY["binary"]
 
-# ============================================================
+
 # MIME DETECTION
-# ============================================================
 
 def guess_mime(path: Path, debug: bool = False) -> str:
     """
-    Determina MIME real de forma robusta e segura para Unicode (Windows).
+    Detecta MIME real com fallback seguro.
     """
 
     path_str = safe_path(path)
 
-    # ✅ MÉTODO PRINCIPAL (SEMPRE PRIORIDADE)
+    # tentativa principal (header)
     try:
         with open(path_str, "rb") as f:
             header = f.read(8192)
+
             if header:
                 return _MAGIC.from_buffer(header)
+
     except Exception as e:
         if debug:
             print(f"[DEBUG] from_buffer falhou: {path_str} | {e}")
 
-    # ❌ NÃO confiar em from_file no Windows
-    # (só usar como fallback opcional, não crítico)
-
-    # ✅ fallback extensão
+    # fallback por extensão
     mime, _ = mimetypes.guess_type(path_str)
+
     if mime:
         return mime
 
-    # ✅ fallback final seguro
+    # fallback final
     return "application/octet-stream"
 
-# ============================================================
+
 # ITER FILES
-# ============================================================
 
 def iter_files(base: Path, exts: Optional[Iterable[str]] = None):
     """
-    Itera ficheiros de forma segura.
+    Itera ficheiros válidos de forma segura.
     """
 
     base = Path(safe_path(base))
@@ -154,13 +136,11 @@ def iter_files(base: Path, exts: Optional[Iterable[str]] = None):
             continue
 
 
-# ============================================================
 # SHA-256
-# ============================================================
 
 def sha256_file(path: Path) -> str:
     """
-    Hash SHA-256 eficiente.
+    Calcula hash SHA-256 do ficheiro.
     """
 
     path_str = safe_path(path)
@@ -173,24 +153,24 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
-# ============================================================
 # CHUNK HASHING
-# ============================================================
 
-def chunk_hashes(path: Path, chunk_size: int = 65536) -> list[str]:
+def chunk_hashes(path: Path, chunk_size: int = 8192) -> list[str]:
     """
-    Hash por blocos (fuzzy).
+    Gera hashes por blocos (fuzzy).
     """
 
     path_str = safe_path(path)
     hashes = []
 
-    MAX_CHUNKS = 10000
+    MAX_CHUNKS = 300
 
     with open(path_str, "rb") as f:
+
         count = 0
 
         for chunk in iter(lambda: f.read(chunk_size), b""):
+
             hashes.append(hashlib.sha256(chunk).hexdigest())
 
             count += 1

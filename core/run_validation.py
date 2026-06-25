@@ -1,26 +1,25 @@
 """
 run_validation.py
 
-Validação de ficheiros (dataset + inputs).
+Validação de ficheiros
 
-✅ suporta ficheiro ou pasta
-✅ dataset → overwrite
-✅ inputs → append (temp_mode)
-✅ separação por categoria
-✅ mantém general_validation.csv
-✅ path curto + abs_path
 """
+
+# IMPORTS BASE
 
 import argparse
 import csv
 import time
+
 from pathlib import Path
 from collections import defaultdict
 
+# utilitários
 from utils.file_utils import iter_files, guess_mime
 from utils.path_utils import path_for_csv
 from utils.path_utils_safe import safe_path, safe_path_obj
 
+# validação
 from validation.general_validation import (
     get_validator,
     check_ext_mime_mismatch,
@@ -29,49 +28,33 @@ from validation.general_validation import (
 )
 
 
-# ============================================================
-# DEBUG
-# ============================================================
+# MAIN
 
-def debug_print(debug: bool, msg: str):
-    if debug:
-        print(f"[DEBUG] {msg}")
+def run_validation(base: Path, out: Path, debug=False, temp_mode=False):
 
-
-# ============================================================
-# CORE
-# ============================================================
-
-def run_validation(
-    base: Path,
-    out: Path,
-    debug: bool = False,
-    temp_mode: bool = False
-) -> dict:
-
+    # normaliza paths
     base = safe_path_obj(base)
     out = safe_path_obj(out)
 
+    # cria pasta output
     out.mkdir(parents=True, exist_ok=True)
 
     valid_files = []
     invalid_files = []
     rows = []
 
-    # ========================================================
-    # FICHEIROS (ficheiro OU pasta)
-    # ========================================================
+    # FILES
 
     if base.is_file():
+        # apenas um ficheiro
         files = [base]
         base_dir = base.parent
     else:
+        # diretoria completa
         files = list(iter_files(base))
         base_dir = base
 
-    label_root = Path("data") / base_dir.name
-
-    # ========================================================
+    # VALIDATION LOOP
 
     for fp in files:
 
@@ -81,72 +64,72 @@ def run_validation(
         message = "-"
         mime = "application/octet-stream"
 
-        # ---------------- MIME ----------------
+        # MIME
+
         try:
             mime = guess_mime(fp)
-            debug_print(debug, f"{fp} → {mime}")
         except Exception as e:
             result = "INVALID"
             message = f"MIME_ERROR: {e}"
 
-        # ---------------- EXT vs MIME ----------------
+        # EXT vs MIME
+
         if result == "VALID":
             mismatch = check_ext_mime_mismatch(fp, mime)
+
             if mismatch:
                 result = "INVALID"
                 message = mismatch
 
-        # ---------------- VALIDADORES ----------------
+        # VALIDATORS
+
         if result == "VALID":
 
             validator = get_validator(mime)
 
+            # validação específica por tipo
             if validator:
                 msg = validator(fp)
+
                 if msg:
                     result = "INVALID"
                     message = msg
 
+            # fallback para texto
             elif mime.startswith("text/"):
                 try:
                     with open(safe_path(fp), "r", encoding="utf-8", errors="ignore") as f:
                         f.read()
-                except Exception:
+                except:
                     result = "INVALID"
                     message = "TEXT_CORRUPT"
 
+            # tipo não suportado
             else:
                 message = f"UNSUPPORTED_TYPE: {mime}"
 
-        # ---------------- TEMPO ----------------
+        # tempo de validação por ficheiro (ms)
         elapsed = round((time.perf_counter() - start) * 1000, 6)
 
-        # ---------------- CATEGORIAS ----------------
+        # categorias
         ext = fp.suffix.lower()
         ext_cat = get_category_from_ext(ext)
         mime_cat = get_category_from_mime(mime)
 
-        # 👉 prioridade ao MIME (mais correto)
         category = mime_cat or "unknown"
 
-        # ---------------- PATHS ----------------
-
-        short_path = path_for_csv(
-            fp,
-            base_dir,
-            dataset_label_root=label_root
-        )
-
+        # paths
+        short_path = path_for_csv(fp, base_dir)
         abs_path = safe_path(fp)
 
-        # ---------------- RESULTADOS ----------------
-
+        # separar válidos / inválidos
         if result == "VALID":
             valid_files.append(fp)
         else:
             invalid_files.append(fp)
 
-        row = {
+        # guardar linha
+        rows.append({
             "method": "general",
             "validation_time_ms": elapsed,
             "mime": mime,
@@ -159,88 +142,51 @@ def run_validation(
                 ext_cat == mime_cat
             ) if ext_cat and mime_cat else True,
             "abs_path": abs_path,
-        }
+        })
 
-        rows.append(row)
+    # GROUP BY CATEGORY
 
-    # ========================================================
-    # ✅ AGRUPAR POR CATEGORIA
-    # ========================================================
+    grouped = defaultdict(list)
 
-    category_rows = defaultdict(list)
+    for r in rows:
+        cat = r["mime_category"] or "unknown"
+        grouped[cat].append(r)
 
-    for row in rows:
-        cat = row["mime_category"] or "unknown"
-        category_rows[cat].append(row)
+    # WRITE CATEGORY CSVs
 
-    # ========================================================
-    # ✅ WRITE POR CATEGORIA
-    # ========================================================
+    for category, cat_rows in grouped.items():
 
-    for category, cat_rows in category_rows.items():
+        csv_path = out / f"{category}_validation.csv"
 
-        if temp_mode:
-            csv_path = out / f"temp_{category}_validation.csv"
-        else:
-            csv_path = out / f"{category}_validation.csv"
-
-        exists = csv_path.exists()
+        # dataset → w / interactive → a
         mode = "a" if temp_mode else "w"
+        exists = csv_path.exists()
 
         with open(safe_path(csv_path), mode, newline="", encoding="utf-8") as f:
 
             writer = csv.DictWriter(
                 f,
-                fieldnames=[
-                    "method",
-                    "validation_time_ms",
-                    "mime",
-                    "message",
-                    "result",
-                    "path",
-                    "ext_category",
-                    "mime_category",
-                    "ext_mime_match",
-                    "abs_path",
-                ],
+                fieldnames=cat_rows[0].keys()
             )
 
+            # header
             if not exists or not temp_mode:
                 writer.writeheader()
 
             writer.writerows(cat_rows)
 
-        debug_print(debug, f"[CSV] {category}: {len(cat_rows)} entradas")
+    # WRITE GENERAL CSV
 
-    # ========================================================
-    # ✅ GENERAL CSV (sempre existe)
-    # ========================================================
+    general_path = out / "general_validation.csv"
 
-    if temp_mode:
-        csv_path = out / "temp_validation.csv"
-        mode = "a"
-        exists = csv_path.exists()
-    else:
-        csv_path = out / "general_validation.csv"
-        mode = "w"
-        exists = False
+    mode = "a" if temp_mode else "w"
+    exists = general_path.exists()
 
-    with open(safe_path(csv_path), mode, newline="", encoding="utf-8") as f:
+    with open(safe_path(general_path), mode, newline="", encoding="utf-8") as f:
 
         writer = csv.DictWriter(
             f,
-            fieldnames=[
-                "method",
-                "validation_time_ms",
-                "mime",
-                "message",
-                "result",
-                "path",
-                "ext_category",
-                "mime_category",
-                "ext_mime_match",
-                "abs_path",
-            ],
+            fieldnames=rows[0].keys()
         )
 
         if not exists or not temp_mode:
@@ -248,22 +194,21 @@ def run_validation(
 
         writer.writerows(rows)
 
-    debug_print(debug, f"[CSV] general: {len(rows)} entradas")
-
+    # return final
     return {
         "valid_files": [safe_path_obj(p) for p in valid_files],
         "invalid_files": [safe_path_obj(p) for p in invalid_files],
     }
 
 
-# ============================================================
 # CLI
-# ============================================================
 
 if __name__ == "__main__":
 
+    # raiz do projeto
     PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
+    # escolher base automática
     default_base = (
         PROJECT_ROOT / "data/original_files"
         if (PROJECT_ROOT / "data/original_files").exists()
@@ -278,6 +223,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    # executar validação
     run_validation(
         base=Path(args.base),
         out=Path(args.out),

@@ -1,13 +1,16 @@
 import csv
 from pathlib import Path
 
+# utilitários
 from utils.path_utils import path_from_csv
 from utils.path_utils_safe import safe_path
 
 
+# AUTO CAST
+
 def _auto_cast(value: str):
     """
-    Converte automaticamente valores do CSV para tipo correto.
+    Converte valores do CSV para tipo correto.
     """
 
     if value is None or value == "":
@@ -15,11 +18,11 @@ def _auto_cast(value: str):
 
     v = value.strip()
 
-    # bool
+    # booleano
     if v.lower() in {"true", "false"}:
         return v.lower() == "true"
 
-    # int
+    # inteiro
     if v.isdigit():
         try:
             return int(v)
@@ -32,38 +35,30 @@ def _auto_cast(value: str):
     except:
         pass
 
-    # string (fallback)
+    # fallback string
     return v
 
 
+# NORMALIZE KEY
+
 def _normalize_key(path: Path) -> str:
     """
-    Normaliza path para chave consistente (CRÍTICO).
+    Normaliza path para chave consistente.
     """
 
+    # normalização segura (unicode + resolve)
     p = Path(safe_path(path)).resolve()
 
-    # ✅ normalização completa
+    # lowercase para evitar inconsistências em Windows
     return str(p).lower()
 
 
+# LOAD INDEX
+
 def load_index(csv_path: Path, dataset_root: Path) -> dict:
     """
-    Carrega index_global.csv com:
+    Carrega CSV de index para estrutura em memória.
 
-    ✅ Unicode safe
-    ✅ tipos corretos
-    ✅ paths consistentes
-
-    Retorna:
-        {
-            "normalized_path": {
-                "sha256": "...",
-                "size": 1234,
-                "score": 0.95,
-                ...
-            }
-        }
     """
 
     index = {}
@@ -73,15 +68,17 @@ def load_index(csv_path: Path, dataset_root: Path) -> dict:
 
         for row in reader:
 
-            # ✅ converter path do CSV → real
+            # converter path do CSV para path real
             real_path = path_from_csv(row["path"], dataset_root)
 
-            # ✅ chave consistente
+            # chave normalizada
             key = _normalize_key(real_path)
 
             index[key] = {}
 
+            # converter campos restantes
             for k, v in row.items():
+
                 if k == "path":
                     continue
 

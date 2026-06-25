@@ -1,22 +1,19 @@
 """
 general_validation.py
 
-Validação de ficheiros antes do pipeline de deduplicação.
+Validação de ficheiros antes do pipeline
 
-✅ deteta ficheiros corrompidos
-✅ valida coerência extensão vs conteúdo
-✅ garante qualidade de input
-
-⚠️ Este módulo é crítico para evitar falsos positivos
+- deteta ficheiros corrompidos
+- valida extensão vs conteúdo
+- garante qualidade do dataset
 """
 
-# ============================================================
 # IMPORTS
-# ============================================================
 
 from pathlib import Path
 import csv
 import time
+
 from zipfile import ZipFile, BadZipFile
 
 from utils.file_utils import iter_files, guess_mime, EXT_BY_CATEGORY
@@ -30,18 +27,14 @@ import cv2
 import json
 
 
-# ============================================================
 # DEBUG
-# ============================================================
 
 def debug_print(debug: bool, msg: str):
     if debug:
         print(f"[DEBUG] {msg}")
 
 
-# ============================================================
 # VALIDADORES
-# ============================================================
 
 def check_cdfv2(path: Path) -> str:
     try:
@@ -52,7 +45,6 @@ def check_cdfv2(path: Path) -> str:
             return "CDFV2_INVALID_HEADER"
 
         return ""
-
     except Exception as e:
         return f"CDFV2_ERROR: {e}"
 
@@ -98,8 +90,9 @@ def check_video(path: Path) -> str:
     try:
         cap = cv2.VideoCapture(safe_path(path))
 
+        # verificar abertura
         if not cap.isOpened():
-            cap.release()   # ✅ FIX IMPORTANTE
+            cap.release()
             return "VIDEO_CORRUPT"
 
         ok, _ = cap.read()
@@ -123,9 +116,7 @@ def check_json(path: Path) -> str:
         return f"JSON_CORRUPT: {e}"
 
 
-# ============================================================
 # CATEGORY HELPERS
-# ============================================================
 
 def get_category_from_ext(ext: str):
     for cat, exts in EXT_BY_CATEGORY.items():
@@ -160,9 +151,7 @@ def get_category_from_mime(mime: str):
     return None
 
 
-# ============================================================
 # EXT vs MIME
-# ============================================================
 
 def check_ext_mime_mismatch(path: Path, mime: str) -> str:
 
@@ -187,9 +176,7 @@ def check_ext_mime_mismatch(path: Path, mime: str) -> str:
     return ""
 
 
-# ============================================================
 # VALIDATOR SELECTOR
-# ============================================================
 
 def get_validator(mime: str):
 
@@ -217,15 +204,15 @@ def get_validator(mime: str):
     return None
 
 
-# ============================================================
 # MAIN
-# ============================================================
 
 def run(base: Path, out: Path, debug: bool = False) -> dict:
 
+    # normalizar paths
     base = Path(safe_path(base))
     out = Path(safe_path(out))
 
+    # criar output
     out.mkdir(parents=True, exist_ok=True)
     csv_path = out / "general_validation.csv"
 
@@ -233,33 +220,39 @@ def run(base: Path, out: Path, debug: bool = False) -> dict:
     invalid_files = []
     rows = []
 
+    # iterar ficheiros
     for fp in iter_files(base):
 
         start = time.perf_counter()
 
         result = "VALID"
         message = "-"
-        mime = "application/octet-stream"  # ✅ melhor default
+        mime = "application/octet-stream"
 
-        # ---------------- MIME ----------------
+        # MIME
+
         try:
             mime = guess_mime(fp)
         except Exception:
             result = "INVALID"
             message = "MIME_ERROR"
 
-        # ---------------- EXT vs MIME ----------------
+        # EXT vs MIME
+
         if result == "VALID":
             mismatch = check_ext_mime_mismatch(fp, mime)
             if mismatch:
                 result = "INVALID"
                 message = mismatch
 
-        # ---------------- VALIDADORES ----------------
+        # VALIDADORES
+
         if result == "VALID":
 
+            # JSON tratado diretamente
             if fp.suffix.lower() == ".json":
                 msg = check_json(fp)
+
                 if msg:
                     result = "INVALID"
                     message = msg
@@ -267,12 +260,15 @@ def run(base: Path, out: Path, debug: bool = False) -> dict:
             else:
                 validator = get_validator(mime)
 
+                # validação específica
                 if validator:
                     msg = validator(fp)
+
                     if msg:
                         result = "INVALID"
                         message = msg
 
+                # fallback para texto
                 elif mime.startswith("text/"):
                     try:
                         with open(safe_path(fp), "r", encoding="utf-8", errors="ignore") as f:
@@ -281,25 +277,20 @@ def run(base: Path, out: Path, debug: bool = False) -> dict:
                         result = "INVALID"
                         message = "TEXT_CORRUPT"
 
+                # tipo não suportado
                 else:
                     result = "INVALID"
                     message = f"UNSUPPORTED_TYPE: {mime}"
 
-        # ----------------------------------------------------
-        # TEMPO
-        # ----------------------------------------------------
+        # tempo por ficheiro (ms)
         elapsed = round((time.perf_counter() - start) * 1000, 6)
 
-        # ----------------------------------------------------
-        # CATEGORIAS
-        # ----------------------------------------------------
+        # categorias
         ext = fp.suffix.lower()
         ext_cat = get_category_from_ext(ext)
         mime_cat = get_category_from_mime(mime)
 
-        # ----------------------------------------------------
-        # RESULTADOS
-        # ----------------------------------------------------
+        # guardar resultado
         (valid_files if result == "VALID" else invalid_files).append(fp)
 
         rows.append({
@@ -308,19 +299,16 @@ def run(base: Path, out: Path, debug: bool = False) -> dict:
             "mime": mime,
             "message": message,
             "result": result,
-
-            # ✅ ALINHADO COM O NOVO path_utils
             "path": path_for_csv(fp, base, dataset_label_root=base),
-
             "ext_category": ext_cat,
             "mime_category": mime_cat,
             "ext_mime_match": ext_cat == mime_cat,
         })
 
-    # ========================================================
     # CSV
-    # ========================================================
+
     with open(safe_path(csv_path), "w", newline="", encoding="utf-8") as f:
+
         writer = csv.DictWriter(f, fieldnames=[
             "method",
             "validation_time_ms",
@@ -332,9 +320,11 @@ def run(base: Path, out: Path, debug: bool = False) -> dict:
             "mime_category",
             "ext_mime_match",
         ])
+
         writer.writeheader()
         writer.writerows(rows)
 
+    # return final
     return {
         "valid_files": valid_files,
         "invalid_files": invalid_files,

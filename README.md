@@ -1,151 +1,329 @@
-<<<<<<< HEAD
-# 📦 Sistema de Deteção de Ficheiros Duplicados e Inconsistências  
-### Pack completo de scripts — Versão Final
+===========================================================
+ SISTEMA MULTIMODAL DE DETEÇÃO DE FICHEIROS DUPLICADOS
+===========================================================
 
-Este pack contém um conjunto completo de scripts Python para analisar ficheiros enviados por clientes, detetar duplicados, quase duplicados, inconsistências e validar conteúdos multimédia (vídeo, áudio, documentos, texto, imagens).
+Sistema automático para:
+- deteção de duplicados exatos
+- deteção de ficheiros semelhantes
+- validação de ficheiros
+- benchmarking de métodos
 
-Foi criado para suportar o projeto:
-**“Sistema Automático de Deteção de Ficheiros Duplicados e Inconsistentes na Receção de Ficheiros de Clientes — ARMIS Group”**
+Projeto desenvolvido no contexto do estágio ARMIS Group.
 
----
+===========================================================
+ VISÃO GERAL
+===========================================================
 
-## 🧩 Funcionalidades incluídas
+O sistema utiliza múltiplos métodos:
 
-### 🔍 1. Duplicados exatos
-- Hashing com **SHA‑256**
-- Deteta ficheiros binariamente iguais
-- CSV: `duplicados_exatos.csv`
+- SHA-256 → duplicados exatos
+- SSDEEP / TLSH → fuzzy hashing
+- fuzzy_chunks → comparação texto/documentos
+- image_phash → imagens
+- audio_phash → áudio
+- video_phash → vídeo
+- text_simhash → texto
 
-### 🔍 2. Quase duplicados (Fuzzy via chunk hashing)
-- Método compatível com Windows  
-- Compara ficheiros por sequência de hashes dos blocos  
-- CSV: `quase_duplicados_fuzzy.csv`
+Inclui ainda:
+- pipeline otimizado (optimized)
+- benchmark completo
+- modo interativo em tempo real
 
-### 🖼️ 3. Similaridade perceptual de imagens
-- `imagehash` (pHash)
-- Deteta imagens iguais ou parecidas
-- CSV: `imagens_perceptual.csv`
+===========================================================
+ INSTALAÇÃO
+===========================================================
 
-### 📄 4. Similaridade de ficheiros de texto
-- SimHash  
-- Suporta JSON, CSV, XML, LOG, TXT
-- CSV: `texto_simhash.csv`
+1. Criar ambiente virtual:
 
-### 🔧 5. Validação geral
-- Valida PDFs (corrupção)
-- Valida ZIPs
-- Verifica incoerências MIME vs extensão
-- CSV: `inconsistencias.csv`
-
-### 🎥 6. Hashing de vídeo
-- SHA‑256 para duplicados exatos  
-- Chunk hashing fuzzy para vídeos parecidos  
-- CSV: `video_duplicados_exatos.csv`, `video_quase_duplicados.csv`
-
-### 🎞️ 7. Similaridade visual entre vídeos (pHash de keyframes)
-- Extração automática de keyframes
-- Hash perceptual para cada frame
-- CSV: `video_phash.csv`
-
-### 🎧 8. Hashing de áudio
-- SHA‑256 e chunk hashing (fuzzy)
-- CSV: `audio_duplicados_exatos.csv`, `audio_quase_duplicados.csv`
-
-### 🔊 9. Similaridade perceptual de áudio (espectrograma Mel)
-- Converte áudio → espectrograma → imagem → pHash
-- CSV: `audio_phash.csv`
-
-### 🛠️ 10. Validação multimédia completa
-- Verifica:
-  - corrupção de vídeos  
-  - corrupção de áudio  
-  - duração  
-  - FPS  
-  - resoluções  
-  - sample rate  
-  - mime real vs extensão  
-- CSV: `validacao_multimedia.csv`
-
----
-
-## ▶️ Execução completa
-
-Para correr todos os módulos automaticamente:
-
-```bash
-python run_all.py --base ../teste_ficheiros --out ./resultados
-```
-
-Isto irá gerar:
-
-- todos os CSVs
-- um relatório final em:  
-  **`resultados/relatorio_final.md`**
-
----
-
-## 📁 Estrutura da pasta
-
-```
-scripts_teste/
-  README.md
-  requirements.txt
-  run_all.py
-  utils/
-    file_utils.py
-  test_hashing_exato.py
-  test_fuzzy_chunks.py
-  test_image_perceptual.py
-  test_simhash_textual.py
-  test_validacao.py
-  test_video_hashing.py
-  test_video_phash.py
-  test_audio_hashing.py
-  test_audio_phash.py
-  test_video_audio_validacao.py
-```
-
----
-
-## 🧪 Como instalar dependências
-
-Criar ambiente virtual (opcional mas recomendado):
-
-```bash
 python -m venv .venv
-```
 
-Ativar:
-
-**Windows**
-```bash
+Windows:
 .venv\Scripts\activate
-```
 
-**Linux/macOS**
-```bash
+Linux/macOS:
 source .venv/bin/activate
-```
 
-Instalar dependências:
+-----------------------------------------------------------
 
-```bash
+2. Instalar dependências:
+
 pip install -r requirements.txt
-```
 
----
+-----------------------------------------------------------
 
-## ⚠️ Notas importantes
+ SSDEEP (Windows)
 
-- `librosa` exige `numpy` instalado.  
-- No Windows, `python-magic` pode não funcionar — mas o sistema trabalha com fallback automático.  
-- `opencv-python` é necessário para vídeo.  
-- `imagehash` + `PIL` precisam de `pillow`.  
+Pode falhar instalação normal.
 
-Todos estes já estão incluídos em `requirements.txt`.
+Usar:
+pip install ssdeep-windows
 
----
-=======
-# Ficheiros-Duplicados
-Sistema Automático de Deteção de Ficheiros Duplicados e Inconsistentes na Receção de Ficheiros de Clientes
->>>>>>> 5a564043640c361e41f373164530e94d9bb8e29e
+Se não funcionar:
+→ sistema continua sem esse método
+
+===========================================================
+EXECUÇÃO: RUN_ALL (MODO COMPLETO)
+===========================================================
+
+Comando:
+
+python -m core.run_all
+
+ou:
+
+python -m core.run_all --base data/original_files --out data/outputs/run_all
+
+-----------------------------------------------------------
+
+
+Pipeline completo:
+
+VALIDATION → INDEX → DETECTION → RESULTADOS → PERFORMANCE
+
+-----------------------------------------------------------
+
+ 1. VALIDATION
+
+- remove ficheiros inválidos
+- verifica corrupção
+- valida MIME vs extensão
+
+Output:
+data/outputs/run_all/validation/
+
+-----------------------------------------------------------
+
+ 2. INDEX
+
+- gera fingerprints para todos os métodos
+- cria:
+
+data/outputs/run_all/dataset_index/combined_index.csv
+
+-----------------------------------------------------------
+
+ 3. DETECTION
+
+- compara todos os pares de ficheiros
+- usa todos os métodos
+
+-----------------------------------------------------------
+
+ OUTPUTS (IMPORTANTE)
+
+ data/outputs/run_all/results/
+
+-----------------------------------------------------------
+
+ CSV POR MÉTODO
+
+Exemplo:
+hashing_exato.csv
+image_phash.csv
+audio_phash.csv
+tlsh.csv
+ssdeep.csv
+
+→ comparações de cada método individual
+
+-----------------------------------------------------------
+
+ CSV PRINCIPAL
+
+ALL_combined.csv
+
+Contém:
+- file_a
+- file_b
+- method
+- raw_score
+- normalized_score
+- is_exact_duplicate
+- is_near_duplicate
+- execution_time_ms
+
+
+-----------------------------------------------------------
+
+ OUTROS CSVs
+
+ALL_exact.csv → apenas duplicados
+ALL_near.csv → semelhantes
+ALL_strong_near.csv → semelhantes fortes
+
+-----------------------------------------------------------
+
+ PERFORMANCE
+
+performance_methods.csv
+
+- tempo por método
+- index + detection
+
+performance_global.csv
+
+- tempo total pipeline
+- validation
+- index
+- detection
+- nº ficheiros
+
+-----------------------------------------------------------
+
+ RESUMO RUN_ALL
+
+- analisa dataset completo
+- gera todos os CSVs
+- permite benchmark
+- execução mais pesada
+
+===========================================================
+ MODO INTERATIVO (interactive_compare.py)
+===========================================================
+
+Comando:
+
+python -m core.interactive_compare
+
+-----------------------------------------------------------
+
+ OBJETIVO
+
+Simular receção de ficheiros em tempo real.
+
+-----------------------------------------------------------
+
+ COMO USAR
+
+Inserir ficheiros um a um:
+
+file> caminho_do_ficheiro
+
+Digite:
+0 → sair
+
+-----------------------------------------------------------
+
+ FLUXO POR FICHEIRO
+
+INPUT
+ ↓
+VALIDATION
+ ↓
+FAST CHECK (SHA-256)
+ ↓
+DEEP CHECK (se necessário)
+ ↓
+CLASSIFICAÇÃO
+ ↓
+ADICIONAR À SESSÃO
+
+-----------------------------------------------------------
+
+ FAST vs DEEP
+
+FAST:
+- hashing_exato
+- deteta duplicados imediatos
+
+DEEP:
+- tlsh
+- image_phash
+- audio_phash
+- video_phash
+- text_simhash
+
+-----------------------------------------------------------
+
+ RESULTADO NO TERMINAL
+
+[DUPLICATE] → duplicado exato
+[STRONG] → muito semelhante
+[SIMILAR] → semelhante
+[INFO] sem matches → diferente
+
+-----------------------------------------------------------
+
+ OUTPUT
+
+data/outputs/interactive/results/ALL_combined.csv
+
+→ histórico da sessão
+
+-----------------------------------------------------------
+
+ COMPORTAMENTO IMPORTANTE
+
+- o primeiro ficheiro cria o index
+- sessão é incremental
+- ficheiros são guardados automaticamente
+- não repete ficheiros iguais
+
+-----------------------------------------------------------
+
+DIFERENÇA VS RUN_ALL
+
+run_all:
+- dataset fixo
+- análise completa
+- benchmarking
+
+interactive:
+- entrada manual
+- incremental
+- mais rápido
+- simula produção real
+
+===========================================================
+ BENCHMARK
+===========================================================
+
+1. Criar ground truth:
+
+python benchmark_cross_files.py
+
+Output:
+benchmark_cross_files.csv
+
+-----------------------------------------------------------
+
+2. Avaliar métodos:
+
+python benchmark_methods.py
+
+Output:
+benchmark_methods_final.csv
+
+-----------------------------------------------------------
+
+ MÉTRICAS
+
+duplicate_success_rate → duplicados detetados
+similarity_success_rate → semelhantes detetados
+total_execution_time_ms → tempo
+
+===========================================================
+ PIPELINE OTIMIZADO
+===========================================================
+
+Método: optimized
+
+- escolhe métodos por tipo:
+  imagem → image_phash
+  áudio → audio_phash
+  vídeo → video_phash
+  texto → text_simhash
+
+- combina scores
+
+Resultado:
+- muito mais rápido
+- eficiente
+
+
+===========================================================
+ AUTOR
+===========================================================
+
+Zhixu Ni - Fcup
+Projeto desenvolvido no contexto de estágio — ARMIS Group

@@ -1,8 +1,10 @@
 """
-indexing/image_phash.py
+image_phash.py
 
-✅ geração de pHash de imagens
-✅ usado no build_index
+Geração de fingerprint perceptual para imagens
+
+- usa perceptual hash (pHash)
+- robusto a pequenas alterações visuais
 """
 
 from pathlib import Path
@@ -14,20 +16,19 @@ import imagehash
 from utils.file_utils import IMAGE_EXT
 
 
-# ============================================================
 # DEBUG
-# ============================================================
 
 def debug_print(debug: bool, msg: str):
     if debug:
         print(f"[DEBUG] {msg}")
 
 
-# ============================================================
 # INDEXAÇÃO
-# ============================================================
 
 def compute_index_image_phash(files: list[Path], debug: bool = False):
+    """
+    Gera pHash para ficheiros de imagem.
+    """
 
     debug_print(debug, "Index image_phash")
 
@@ -35,18 +36,26 @@ def compute_index_image_phash(files: list[Path], debug: bool = False):
 
     for fp in files:
 
+        # filtrar apenas imagens
         if fp.suffix.lower() not in IMAGE_EXT:
             continue
 
         start = time.perf_counter()
 
         try:
+            # calcular perceptual hash
             with Image.open(fp) as im:
                 ph = imagehash.phash(im)
-        except Exception:
-            continue  # ✅ temp-friendly
 
-        elapsed = max(0.000001, round((time.perf_counter() - start) * 1000, 6))
+        except Exception:
+            # ignorar ficheiros problemáticos
+            continue
+
+        # tempo por ficheiro (ms)
+        elapsed = max(
+            0.000001,
+            round((time.perf_counter() - start) * 1000, 6)
+        )
 
         index.append({
             "file_path": fp,

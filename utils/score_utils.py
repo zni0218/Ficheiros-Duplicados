@@ -1,21 +1,31 @@
-# ============================================================
 # utils/score_utils.py
-# ============================================================
 
-# ============================================================
-# CONFIGURAÇÃO GLOBAL
-# ============================================================
+"""
+score_utils.py
 
+Gestão de scores e classificação de similaridade
+
+- normalização de scores por método
+- classificação individual (exact / near / strong)
+- cálculo de score combinado
+- decisão final global
+"""
+
+
+# CONFIG
+
+# thresholds por método
 THRESHOLDS = {
-    "ssdeep": 0.85,
-    "tlsh": 0.80,
-    "image_phash": 0.90,
-    "video_phash": 0.85,
-    "audio_phash": 0.85,
-    "text_simhash": 0.90,
-    "fuzzy_chunks": 0.85,
+    "ssdeep": 0.7,
+    "tlsh": 0.7,
+    "image_phash": 0.7,
+    "video_phash": 0.7,
+    "audio_phash": 0.7,
+    "text_simhash": 0.7,
+    "fuzzy_chunks": 0.7,
 }
 
+# distâncias máximas para normalização
 MAX_DISTANCE = {
     "image_phash": 64,
     "video_phash": 50,
@@ -24,6 +34,7 @@ MAX_DISTANCE = {
     "text_simhash": 64,
 }
 
+# pesos para score combinado
 WEIGHTS = {
     "ssdeep": 0.4,
     "tlsh": 0.3,
@@ -34,43 +45,27 @@ WEIGHTS = {
     "fuzzy_chunks": 0.4,
 }
 
-# 🔥 NÃO alterar valor → muda apenas o significado
-STRONG_NEAR_THRESHOLD = 0.98
+# thresholds globais
+STRONG_NEAR_THRESHOLD = 0.9
+GLOBAL_NEAR_THRESHOLD = 0.8
 
-GLOBAL_NEAR_THRESHOLD = 0.85
 
-
-# ============================================================
 # NORMALIZAÇÃO
-# ============================================================
 
 def normalize_score(method, raw_score):
     """
-    Converte scores de diferentes algoritmos para [0,1].
-
-    🔥 REGRA CRÍTICA:
-    1.0 é reservado para EXACT (SHA)
+    Normaliza score bruto para intervalo [0, 1].
     """
 
     if raw_score is None:
         return 0.0
 
-    # --------------------------------------------------------
-    # SIMILARIDADE DIRETA (↑ melhor)
-    # --------------------------------------------------------
+    # métodos baseados em percentagem
     if method in ("ssdeep", "fuzzy_chunks"):
-
         norm = raw_score / 100.0
-
-        # 🔥 impedir que fuzzy seja exact
-        if norm >= 1.0:
-            return 0.999
-
         return max(0.0, min(1.0, norm))
 
-    # --------------------------------------------------------
-    # DISTÂNCIA (↓ melhor → inverter)
-    # --------------------------------------------------------
+    # métodos baseados em distância
     if method in MAX_DISTANCE:
 
         max_dist = MAX_DISTANCE[method]
@@ -79,57 +74,48 @@ def normalize_score(method, raw_score):
             return 0.0
 
         norm = 1 - (raw_score / max_dist)
-
-        # 🔥 impedir 1.0
-        if norm >= 1.0:
-            return 0.999
-
         return max(0.0, min(1.0, norm))
 
     return 0.0
 
 
-# ============================================================
 # CLASSIFICAÇÃO INDIVIDUAL
-# ============================================================
 
 def classify_score(method, raw_score, sha_match):
     """
-    Classifica resultado de um método individual.
-
-    Retorna:
-        norm, is_exact, is_near, is_maybe_exact
+    Classifica score de um método individual.
     """
 
     norm = normalize_score(method, raw_score)
 
-    # ✅ EXACT (único critério)
-    is_exact = bool(sha_match)
+    # duplicado exato
+    is_exact = (norm == 1.0) or bool(sha_match)
 
-    threshold = THRESHOLDS.get(method, 0.85)
+    threshold = THRESHOLDS.get(method, 0.8)
 
-    # ✅ NEAR (normal)
-    is_near = (norm >= threshold) and not is_exact
-
-    # ✅ MAYBE EXACT (novo)
-    is_maybe_exact = (
-        norm >= STRONG_NEAR_THRESHOLD
-        and not is_exact
+    # semelhante
+    is_near = (
+        norm >= threshold
+        and norm < 1.0
     )
 
-    return norm, is_exact, is_near, is_maybe_exact
+    # semelhante forte
+    is_strong_near = (
+        norm >= STRONG_NEAR_THRESHOLD
+        and norm < 1.0
+    )
+
+    return norm, is_exact, is_near, is_strong_near
 
 
-# ============================================================
 # SCORE COMBINADO
-# ============================================================
 
 def compute_combined_score(scores_dict, has_exact):
     """
-    Combina múltiplos métodos num score único [0,1].
+    Combina scores de vários métodos com pesos.
     """
 
-    # ✅ prioridade absoluta ao exact
+    # se já houver duplicado exato
     if has_exact:
         return 1.0
 
@@ -154,33 +140,22 @@ def compute_combined_score(scores_dict, has_exact):
 
     result = total / weight_sum
 
-    # 🔥 impedir 1.0 sem ser exact
-    if result >= 1.0:
-        return 0.999
-
-    return result
+    return max(0.0, min(1.0, result))
 
 
-# ============================================================
 # CLASSIFICAÇÃO FINAL
-# ============================================================
 
 def classify_final(combined_score, has_exact):
     """
     Classificação final global.
-
-    Retorna:
-        source_type, near_all, near_exclusive, maybe_exact_flag
     """
 
-    # --------------------------------------------------------
-    # TIPO PRINCIPAL
-    # --------------------------------------------------------
+    # tipo principal
     if has_exact:
         source_type = "exact"
 
     elif combined_score >= STRONG_NEAR_THRESHOLD:
-        source_type = "maybe_exact"
+        source_type = "strong_near"
 
     elif combined_score >= GLOBAL_NEAR_THRESHOLD:
         source_type = "near"
@@ -188,15 +163,14 @@ def classify_final(combined_score, has_exact):
     else:
         source_type = "low_similarity"
 
-    # --------------------------------------------------------
-    # FLAGS
-    # --------------------------------------------------------
+    # flags auxiliares
     near_all = combined_score >= GLOBAL_NEAR_THRESHOLD
+
     near_exclusive = near_all and not has_exact
 
-    maybe_exact_flag = (
+    strong_near_flag = (
         combined_score >= STRONG_NEAR_THRESHOLD
         and not has_exact
     )
 
-    return source_type, near_all, near_exclusive, maybe_exact_flag
+    return source_type, near_all, near_exclusive, strong_near_flag

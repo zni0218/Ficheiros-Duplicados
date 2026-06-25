@@ -1,14 +1,15 @@
-# Arquivo .gitignore para ignorar pastas e arquivos desnecessários
 
-# 🐍 Python
+#  PYTHON
+
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+
 .Python
 build/
-develop-eggs/
 dist/
+develop-eggs/
 downloads/
 eggs/
 .eggs/
@@ -18,37 +19,68 @@ parts/
 sdist/
 var/
 wheels/
+
 *.egg-info/
 .installed.cfg
 *.egg
 
-# 🔧 Build artifacts (do ssdeep)
-ssdeep_windows_32_64.egg-info/
-ssdeep/          # Pasta local de ssdeep (nem sempre funciona em Windows)
 
-# 📊 Output e dados
-output/
-*.csv
-*.log
+#  VIRTUAL ENVIRONMENTS
 
-# 🔍 IDE
-.vscode/
-.idea/
-*.swp
-*.swo
 
-# 🛠️ OS
-.DS_Store
-Thumbs.db
-*.tmp
-
-# 📦 Dependências (usar requirements.txt)
 venv/
 env/
 ENV/
+.venv/
 
-# 💾 Ficheiros temporários
+
+
+#  PROJETO (DADOS E OUTPUTS)
+
+
+# dados e outputs (pesados / gerados automaticamente)
+data
+
+# ficheiros gerados
+*.csv
+*.log
+
+# resultados específicos
+benchmark_*.csv
+performance_*.csv
+
+
+
+#  BUILD / DEPENDÊNCIAS ESPECIAIS
+
+
+ssdeep/
+ssdeep_windows_32_64.egg-info/
+
+
+
+#  IDE / EDITOR
+
+
+.vscode/
+.idea/
+
+*.swp
+*.swo
+*~
+
+
+
+#  SISTEMA OPERATIVO
+
+
+.DS_Store
+Thumbs.db
+
+
+
+#  TEMP
+
+
 *.tmp
 *.temp
-*~
-data/

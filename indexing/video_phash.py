@@ -1,11 +1,11 @@
 """
-indexing/video_phash.py
+video_phash.py
 
-✅ geração de pHash para vídeos
-✅ sampling inteligente (início / meio / fim)
-✅ FAST (não lê todos frames)
-✅ garante sempre TOTAL_FRAMES hashes
-✅ fallback para vídeos curtos / estáticos
+Geração de fingerprint perceptual para vídeo
+
+- utiliza sampling de frames (início / meio / fim)
+- evita leitura completa do vídeo (FAST)
+- garante número fixo de hashes
 """
 
 from pathlib import Path
@@ -18,33 +18,32 @@ import imagehash
 from utils.file_utils import VIDEO_EXT
 
 
-# ============================================================
 # DEBUG
-# ============================================================
 
 def debug_print(debug: bool, msg: str):
     if debug:
         print(f"[DEBUG] {msg}")
 
 
-# ============================================================
 # CONFIG
-# ============================================================
 
-TOTAL_FRAMES = 12  # 🎯 objetivo final
+# número total de frames utilizados
+TOTAL_FRAMES = 10
 
+# distribuição dos frames
 START_RATIO = 0.3
 MID_RATIO   = 0.4
 END_RATIO   = 0.3
 
 
-# ============================================================
 # POSITIONS
-# ============================================================
 
 def generate_positions(frame_count, debug=False):
+    """
+    Gera posições de frames a analisar.
+    """
 
-    # distribuição correta (garante soma = TOTAL)
+    # distribuição
     start_frames = int(TOTAL_FRAMES * START_RATIO)
     mid_frames   = int(TOTAL_FRAMES * MID_RATIO)
     end_frames   = TOTAL_FRAMES - start_frames - mid_frames
@@ -52,16 +51,27 @@ def generate_positions(frame_count, debug=False):
     def linspace(start, end, n):
         if n <= 1:
             return [int(start)]
+
         step = (end - start) / (n - 1)
         return [int(start + i * step) for i in range(n)]
 
-    # zonas do vídeo
+    # início
     start_pos = linspace(0, int(frame_count * 0.3), start_frames)
-    mid_pos   = linspace(int(frame_count * 0.3), int(frame_count * 0.7), mid_frames)
 
-    # ⚠️ evita últimos frames (problemas H264)
+    # meio
+    mid_pos = linspace(
+        int(frame_count * 0.3),
+        int(frame_count * 0.7),
+        mid_frames
+    )
+
+    # fim (evita frames finais problemáticos)
     safe_end = max(0, frame_count - 5)
-    end_pos = linspace(int(frame_count * 0.7), safe_end, end_frames)
+    end_pos = linspace(
+        int(frame_count * 0.7),
+        safe_end,
+        end_frames
+    )
 
     positions = sorted(set(int(p) for p in (start_pos + mid_pos + end_pos)))
 
@@ -70,16 +80,17 @@ def generate_positions(frame_count, debug=False):
     return positions
 
 
-# ============================================================
 # EXTRAÇÃO
-# ============================================================
 
 def extract_keyframe_phashes(path: Path, debug=False):
+    """
+    Extrai pHashes de frames representativos do vídeo.
+    """
 
     cap = cv2.VideoCapture(str(path))
 
     if not cap.isOpened():
-        debug_print(debug, f"Erro abrir vídeo: {path}")
+        debug_print(debug, f"erro abrir vídeo: {path}")
         return []
 
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -96,9 +107,8 @@ def extract_keyframe_phashes(path: Path, debug=False):
     phashes = []
     last_hash = None
 
-    # =====================================================
-    # PRIMEIRA PASSAGEM (sem duplicados)
-    # =====================================================
+    # PRIMEIRA PASSAGEM (evitar duplicados)
+
     for f in positions:
 
         cap.set(cv2.CAP_PROP_POS_FRAMES, int(f))
@@ -114,7 +124,7 @@ def extract_keyframe_phashes(path: Path, debug=False):
 
             h = str(imagehash.phash(img))
 
-            # evitar duplicados
+            # evitar duplicados consecutivos
             if h != last_hash:
                 phashes.append(h)
                 last_hash = h
@@ -125,14 +135,11 @@ def extract_keyframe_phashes(path: Path, debug=False):
         except Exception as e:
             debug_print(debug, f"erro frame {f}: {e}")
 
-    # =====================================================
-    # SEGUNDA PASSAGEM (GARANTIR TOTAL_FRAMES)
-    # =====================================================
+    # SEGUNDA PASSAGEM (garantir TOTAL_FRAMES)
+
     if len(phashes) < TOTAL_FRAMES:
 
-        debug_print(debug,
-            f"fallback: {len(phashes)} -> {TOTAL_FRAMES} hashes"
-        )
+        debug_print(debug, f"fallback: {len(phashes)} -> {TOTAL_FRAMES} hashes")
 
         for f in positions:
 
@@ -164,16 +171,18 @@ def extract_keyframe_phashes(path: Path, debug=False):
     return phashes
 
 
-# ============================================================
 # INDEXAÇÃO
-# ============================================================
 
 def compute_index_video_phash(files: list[Path], debug=False):
+    """
+    Gera fingerprints de vídeo usando pHash.
+    """
 
     index = []
 
     for fp in files:
 
+        # filtrar apenas vídeos
         if fp.suffix.lower() not in VIDEO_EXT:
             continue
 
@@ -181,6 +190,7 @@ def compute_index_video_phash(files: list[Path], debug=False):
 
         try:
             phashes = extract_keyframe_phashes(fp, debug=debug)
+
         except Exception as e:
             debug_print(debug, f"erro {fp}: {e}")
             continue
@@ -188,6 +198,7 @@ def compute_index_video_phash(files: list[Path], debug=False):
         if not phashes:
             continue
 
+        # tempo por ficheiro (ms)
         elapsed = max(
             0.000001,
             round((time.perf_counter() - start_time) * 1000, 6)

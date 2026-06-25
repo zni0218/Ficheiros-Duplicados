@@ -1,7 +1,9 @@
 """
-run_all.py
-Pipeline completo:
-validation → build_index → run_detection
+run_optimized.py
+
+Pipeline otimizado:
+
+Usa apenas métodos selecionados para melhor performance
 """
 
 # IMPORTS BASE
@@ -13,26 +15,25 @@ import time
 # manipulação de paths
 from pathlib import Path
 
-# compatibilidade windows
+# normalização de paths
 from utils.path_utils_safe import safe_path
 
-# módulos principais
+# módulos do pipeline
 from core.run_validation import run_validation
 from core.build_index import build_index
 from core.run_detection import run_detection
 
 
-# CONFIG
+# MÉTODOS OTIMIZADOS
 
+# subconjunto escolhido para reduzir custo do index
 METHODS = [
     "hashing_exato",
-    "image_phash",
-    "audio_phash",
-    "text_simhash",
-    "video_phash",
-    "ssdeep",
     "tlsh",
-    "fuzzy_chunks"
+    "image_phash",
+    "text_simhash",
+    "audio_phash",
+    "video_phash",
 ]
 
 
@@ -40,30 +41,30 @@ METHODS = [
 
 def write_csv(path: Path, rows):
 
-    # ignora se não houver dados
+    # não escreve se vazio
     if not rows:
         return
 
-    # escreve ficheiro novo
+    # cria ficheiro novo
     with open(safe_path(path), "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=rows[0].keys())
 
         # header
         writer.writeheader()
 
-        # linhas
+        # dados
         writer.writerows(rows)
 
 
 # MAIN
 
-def run_all(base: Path, out: Path, debug=False):
+def run_optimized(base: Path, out: Path, debug=False):
 
     # normaliza paths
     base = Path(safe_path(base))
     out = Path(safe_path(out))
 
-    # cria pasta base
+    # cria diretoria base
     out.mkdir(parents=True, exist_ok=True)
 
     # estrutura de pastas
@@ -71,6 +72,7 @@ def run_all(base: Path, out: Path, debug=False):
     res_dir = out / "results"
     perf_dir = out / "performance"
 
+    # cria se não existir
     for d in [idx_dir, res_dir, perf_dir]:
         d.mkdir(exist_ok=True)
 
@@ -111,7 +113,7 @@ def run_all(base: Path, out: Path, debug=False):
         debug=debug
     )
 
-    # tempo index total
+    # tempo total de index
     t_index = time.perf_counter() - t0
 
     # tempos por método (já em segundos)
@@ -121,7 +123,7 @@ def run_all(base: Path, out: Path, debug=False):
 
     t0 = time.perf_counter()
 
-    # execução da comparação
+    # executa comparação
     results = run_detection(
         index_dir=out,
         temp_dir=None,
@@ -141,11 +143,9 @@ def run_all(base: Path, out: Path, debug=False):
 
     for r in results:
 
-        method = r["method"]
-
         # normalizar estrutura
         row = {
-            "method": method,
+            "method": r["method"],
             "file_a": r["file_a"],
             "file_b": r["file_b"],
             "raw_score": r["raw_score"],
@@ -156,10 +156,12 @@ def run_all(base: Path, out: Path, debug=False):
             "execution_time_ms": r["execution_time_ms"],
         }
 
-        # agrupar por método
-        per_method.setdefault(method, []).append(row)
+        m = r["method"]
 
-        # classificar resultado
+        # agrupar por método
+        per_method.setdefault(m, []).append(row)
+
+        # classificação
         if r["is_exact_duplicate"]:
             exact_rows.append(row)
 
@@ -172,11 +174,11 @@ def run_all(base: Path, out: Path, debug=False):
 
     # GUARDAR RESULTADOS
 
-    # CSV por método
+    # CSVs por método
     for method, rows in per_method.items():
         write_csv(res_dir / f"{method}.csv", rows)
 
-    # CSVs agregados
+    # CSVs globais
     write_csv(res_dir / "ALL_exact.csv", exact_rows)
     write_csv(res_dir / "ALL_near.csv", near_rows)
     write_csv(res_dir / "ALL_strong_near.csv", strong_rows)
@@ -186,10 +188,10 @@ def run_all(base: Path, out: Path, debug=False):
 
     # PERFORMANCE POR MÉTODO
 
-    method_perf = []
     detection_times = {}
+    method_perf = []
 
-    # somar tempos de detection (ms)
+    # soma detection (ms)
     for r in results:
         m = r["method"]
 
@@ -202,7 +204,7 @@ def run_all(base: Path, out: Path, debug=False):
         # index já está em segundos
         idx_t = index_times.get(m, 0)
 
-        # detection convertido para segundos
+        # converter ms → segundos
         det_t = detection_times.get(m, 0) / 1000
 
         method_perf.append({
@@ -222,15 +224,20 @@ def run_all(base: Path, out: Path, debug=False):
     write_csv(
         perf_dir / "performance_global.csv",
         [{
+            # tempo total pipeline
             "total_pipeline_time_s": round(total_time, 4),
+
+            # tempos por fase
             "validation_s": round(t_validation, 4),
             "index_s": round(t_index, 4),
             "detection_s": round(t_detection, 4),
+
+            # nº ficheiros válidos
             "total_files": len(valid_files)
         }]
     )
 
-    print(f"[OK] Pipeline completo em {total_time:.4f}s")
+    print(f"[OK] Optimized pipeline em {total_time:.4f}s")
 
 
 # CLI
@@ -242,25 +249,25 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    # diretoria de entrada
+    # input
     parser.add_argument(
         "--base",
         default=str(PROJECT_ROOT / "data/original_files")
     )
 
-    # diretoria de output
+    # output
     parser.add_argument(
         "--out",
-        default=str(PROJECT_ROOT / "data/outputs/run_all")
+        default=str(PROJECT_ROOT / "data/outputs/run_optimized")
     )
 
-    # ativar debug
+    # debug
     parser.add_argument("--debug", action="store_true")
 
     args = parser.parse_args()
 
     # executar pipeline
-    run_all(
+    run_optimized(
         base=Path(args.base),
         out=Path(args.out),
         debug=args.debug
