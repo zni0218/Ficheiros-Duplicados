@@ -31,9 +31,11 @@ certifi==2022.12.7
 cffi==1.16.0
 charset-normalizer==3.1.0
 click==8.1.7
+cloudpickle==3.1.2
 clyent==1.2.1
 colorama==0.4.6
 comm==0.1.3
+confine-controller==1.0.2
 contourpy==1.0.7
 cryptography==43.0.3
 cycler==0.11.0
@@ -45,6 +47,7 @@ dnspython==2.7.0
 et-xmlfile==1.1.0
 exceptiongroup==1.2.1
 executing==1.2.0
+Farama-Notifications==0.0.4
 fastjsonschema==2.19.1
 filelock==3.16.1
 Flask==2.2.5
@@ -53,11 +56,13 @@ fonttools==4.39.4
 fqdn==1.5.1
 frozendict==2.4.6
 frozenlist==1.5.0
+fsspec==2026.3.0
 gast==0.4.0
 google-auth==2.43.0
 google-auth-oauthlib==1.0.0
 google-pasta==0.2.0
 grpcio==1.74.0
+gymnasium==1.2.3
 h11==0.14.0
 h5py==3.15.1
 html5lib==1.1
@@ -107,6 +112,7 @@ mdurl==0.1.2
 mir_eval==0.8.2
 mistune==3.0.2
 ml-dtypes==0.4.1
+mpmath==1.3.0
 msgpack==1.1.2
 multidict==5.2.0
 multitasking==0.0.11
@@ -165,6 +171,8 @@ pyppmd==1.2.0
 pyproject_hooks==1.2.0
 python-dateutil==2.8.2
 python-json-logger==2.0.7
+python-magic==0.4.27
+python-magic-bin==0.4.14
 pytz==2022.1
 PyWavelets==1.8.0
 pywin32==306
@@ -197,8 +205,11 @@ soundfile==0.13.1
 soupsieve==2.5
 soxr==0.5.0.post1
 spade==3.3.3
+ssdeep-windows-32_64==0.0.1
+stable_baselines3==2.8.0
 stack-data==0.6.2
 statsmodels==0.14.5
+sympy==1.14.0
 tensorboard==2.18.0
 tensorboard-data-server==0.7.2
 tensorflow==2.18.0
@@ -211,12 +222,12 @@ terminado==0.18.1
 texttable==1.7.0
 tf_keras==2.18.0
 threadpoolctl==3.1.0
-thundersvm==0.3.12
 tifffile==2025.5.10
 timeago==1.0.16
 tinycss2==1.3.0
 tlsh==0.2.0
 tomli==2.0.1
+torch==2.11.0
 tornado==6.2
 tqdm==4.66.1
 traitlets==5.9.0
