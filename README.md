@@ -1,6 +1,6 @@
-===========================================================
- SISTEMA MULTIMODAL DE DETEÇÃO DE FICHEIROS DUPLICADOS
-===========================================================
+
+# SISTEMA MULTIMODAL DE DETEÇÃO DE FICHEIROS DUPLICADOS
+
 
 Sistema automático para:
 - deteção de duplicados exatos
@@ -8,11 +8,11 @@ Sistema automático para:
 - validação de ficheiros
 - benchmarking de métodos
 
-Projeto desenvolvido no contexto do estágio ARMIS Group.
+ Projeto desenvolvido no contexto do estágio ARMIS Group.
 
-===========================================================
- VISÃO GERAL
-===========================================================
+
+ # VISÃO GERAL
+
 
 O sistema utiliza múltiplos métodos:
 
@@ -29,9 +29,8 @@ Inclui ainda:
 - benchmark completo
 - modo interativo em tempo real
 
-===========================================================
- INSTALAÇÃO
-===========================================================
+
+# INSTALAÇÃO
 
 1. Criar ambiente virtual:
 
@@ -61,9 +60,9 @@ pip install ssdeep-windows
 Se não funcionar:
 → sistema continua sem esse método
 
-===========================================================
-EXECUÇÃO: RUN_ALL (MODO COMPLETO)
-===========================================================
+
+# EXECUÇÃO: RUN_ALL (MODO COMPLETO)
+
 
 Comando:
 
@@ -177,9 +176,9 @@ performance_global.csv
 - permite benchmark
 - execução mais pesada
 
-===========================================================
- MODO INTERATIVO (interactive_compare.py)
-===========================================================
+
+# MODO INTERATIVO (interactive_compare.py)
+
 
 Comando:
 
@@ -274,9 +273,8 @@ interactive:
 - mais rápido
 - simula produção real
 
-===========================================================
- BENCHMARK
-===========================================================
+# BENCHMARK
+
 
 1. Criar ground truth:
 
@@ -302,9 +300,9 @@ duplicate_success_rate → duplicados detetados
 similarity_success_rate → semelhantes detetados
 total_execution_time_ms → tempo
 
-===========================================================
- PIPELINE OTIMIZADO
-===========================================================
+
+# PIPELINE OTIMIZADO
+
 
 Método: optimized
 
@@ -321,9 +319,9 @@ Resultado:
 - eficiente
 
 
-===========================================================
- AUTOR
-===========================================================
+
+# AUTOR
+
 
 Zhixu Ni - Fcup
 Projeto desenvolvido no contexto de estágio — ARMIS Group
