@@ -26,41 +26,49 @@ global_all = pd.read_csv(RUN_ALL_GLOBAL)
 global_opt = pd.read_csv(RUN_OPT_GLOBAL)
 
 
+
+
 # ============================
-# 1. COMPARAÇÃO MÉTODOS
+# 1. COMPARAÇÃO MÉTODOS (3 COLUNAS)
 # ============================
 plt.figure()
 
-# garantir que só compara métodos comuns
-common_methods = set(df_all["method"])
+# dados
+methods = df_all["method"]
+index_time = df_all["index_time_s"]
+detection_time = df_all["detection_time_s"]
+total_time = df_all["total_time_s"]
 
-df_all_filtered = df_all[df_all["method"].isin(common_methods)]
+# posições
+x = list(range(len(methods)))
 
+# largura das barras
+width = 0.25
 
-# ordenar igual
-df_all_filtered = df_all_filtered.set_index("method").loc[sorted(common_methods)]
+# barras
+plt.bar([i - width for i in x], index_time, width=width, label="Indexação")
+plt.bar(x, detection_time, width=width, label="Deteção")
+plt.bar([i + width for i in x], total_time, width=width, label="Total")
 
-x = range(len(common_methods))
-
-plt.bar([i - 0.2 for i in x], df_all_filtered["total_time_s"], width=0.4, label="run_all")
-
-
-plt.xticks(x, df_all_filtered.index, rotation=45)
-plt.ylabel("Tempo total (s)")
-plt.title("Comparação de Métodos: run_all")
+# labels
+plt.xticks(x, methods, rotation=45)
+plt.ylabel("Tempo (s)")
+plt.title("Comparação de Tempos por Método (run_all)")
 plt.legend()
-plt.tight_layout()
 
-plt.savefig("comparacao_metodos.png")
+plt.tight_layout()
+plt.savefig("metodos_3_colunas.png")
 plt.show()
+
 
 
 # ============================
 # 2. COMPARAÇÃO GLOBAL
 # ============================
-labels = ["validation", "index", "detection"]
+labels = ["total", "validation", "index", "detection"]
 
 all_times = [
+    global_all["total_pipeline_time_s"][0],
     global_all["validation_s"][0],
     global_all["index_s"][0],
     global_all["detection_s"][0]
@@ -68,6 +76,7 @@ all_times = [
 
 
 opt_times = [
+    global_opt["total_pipeline_time_s"][0],
     global_opt["validation_s"][0],
     global_opt["index_s"][0],
     global_opt["detection_s"][0]
